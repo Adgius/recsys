@@ -1,0 +1,66 @@
+version: "2.1"
+services:
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    container_name: rabitmq
+    hostname: rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=$RABBITMQ_USER
+      - RABBITMQ_DEFAULT_PASS=$RABBITMQ_PASS
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 268435456
+    ports:
+      - 5672:5672  
+      - 15672:15672
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    restart: always
+    entrypoint: redis-server --appendonly yes --requirepass $REDIS_PASSWORD --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - default
+    ports:
+      - "6379:6379"
+
+  redis-ui:
+    image: patrikx3/p3x-redis-ui:latest
+    ports:
+      - "7843:7843"
+    volumes:
+      - /home/user/p3x-redis-ui-settings:/settings
+
+  backend:
+    container_name: backend
+    build: 
+      context: ./event_collector
+      dockerfile: backend.Dockerfile
+    volumes:
+      - ./utils:/app/utils
+    environment:
+      - PYTHONPATH=/app/utils
+      - RABBITMQ_HOST=$RABBITMQ_HOST
+      - RABBITMQ_PORT=$RABBITMQ_PORT
+      - RABBITMQ_USER=$RABBITMQ_USER
+      - RABBITMQ_PASS=$RABBITMQ_PASS
+      - REDIS_HOST=$REDIS_HOST
+      - REDIS_PORT=$REDIS_PORT
+      - REDIS_PASSWORD=$REDIS_PASSWORD
+    ports:
+      - 5000:5000
+
+  frontend:
+    container_name: frontend
+    build: 
+      context: ./webapp
+      dockerfile: frontend.Dockerfile
+    volumes:
+      - ./utils:/app/utils
+    environment:
+      - PYTHONPATH=/app/utils
+      - RECSYS_SERVICE_URL=$RECSYS_SERVICE_URL
+      - SERVICE_API_URL=$SERVICE_API_URL
+      - S3_PUB=$S3_PUB
+      - S3_SECRET=$S3_SECRET
+    ports:
+      - 8000:8000

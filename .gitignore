@@ -1,0 +1,8 @@
+**/.venv
+**/.ipynb_checkpoints
+**/__pycache__
+**/.python-version
+**/*.bat
+**/*.ipynb
+**/.DS_Store
+./webapp/static/images
