@@ -8,17 +8,32 @@ import polars as pl
 import redis
 from aio_pika import Message
 
-redis_connection = redis.Redis('localhost')
+redis_conn = 'redis://{username}:{password}@{host}:{port}/popular'.format(
+    username=os.environ.get('REDIS_USER', 'default'),
+    password=os.environ.get('REDIS_PASSWORD'),
+    host=os.environ.get('REDIS_HOST', 'localhost'),
+    port=os.environ.get('REDIS_PORT', 6379),
+)
+print(redis_conn)
+redis_connection = redis.Redis.from_url(redis_conn)
 
 
 async def collect_messages():
+    conn_url = "amqp://{}:{}@{}/".format(
+        os.environ.get('RABBITMQ_USER', 'guest'),
+        os.environ.get('RABBITMQ_PASS', 'guest'),
+        os.environ.get('RABBITMQ_HOST', 'localhost')
+    )
+    print(conn_url)
     connection = await aio_pika.connect_robust(
-        "amqp://guest:guest@127.0.0.1/",
-        loop=asyncio.get_event_loop()
+        conn_url,
+        loop=asyncio.get_event_loop(),
+        port=int(os.environ.get('RABBITMQ_PORT', 5672))
     )
 
     queue_name = "user_interactions"
     routing_key = "user.interact.message"
+    exchange = "user.interact"
 
     async with connection:
         # Creating channel
@@ -31,7 +46,7 @@ async def collect_messages():
         queue = await channel.declare_queue(queue_name)
 
         # Declaring exchange
-        exchange = await channel.declare_exchange("user.interact", type='direct')
+        exchange = await channel.declare_exchange(exchange, type='direct')
         await queue.bind(exchange, routing_key)
         # await exchange.publish(Message(bytes(queue.name, "utf-8")), routing_key)
 
@@ -41,8 +56,11 @@ async def collect_messages():
             async for message in queue_iter:
                 async with message.process():
                     message = message.body.decode()
+                    message = json.loads(message)
+                    data.append(message)
                     if time.time() - t_start > 10:
                         print('saving events from rabbitmq')
+                        print(data)
                         # update data if 10s passed
                         new_data = pl.DataFrame(data).explode(['item_ids', 'actions']).rename({
                             'item_ids': 'item_id',
@@ -50,30 +68,28 @@ async def collect_messages():
                         })
 
                         if len(new_data) > 0:
-                            if os.path.exists('../data/interactions.csv'):
-                                data = pl.concat([pl.read_csv('../data/interactions.csv'), new_data])
+                            if os.path.exists('./data/interactions.csv'):
+                                data = pl.concat([pl.read_csv('./data/interactions.csv'), new_data])
                             else:
                                 data = new_data
-                            data.write_csv('../data/interactions.csv')
+                            data.write_csv('./data/interactions.csv')
 
                         data = []
                         t_start = time.time()
 
-                    message = json.loads(message)
-                    data.append(message)
 
 
 async def calculate_top_recommendations():
     while True:
-        if os.path.exists('../data/interactions.csv'):
+        if os.path.exists('./data/interactions.csv'):
             print('calculating top recommendations')
-            interactions = pl.read_csv('../data/interactions.csv')
+            interactions = pl.read_csv('./data/interactions.csv')
             top_items = (
                 interactions
                 .sort('timestamp')
                 .unique(['user_id', 'item_id', 'action'], keep='last')
                 .filter(pl.col('action') == 'like')
-                .groupby('item_id')
+                .group_by('item_id')
                 .count()
                 .sort('count', descending=True)
                 .head(100)

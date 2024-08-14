@@ -5,6 +5,11 @@ services:
     container_name: rabitmq
     hostname: rabbitmq
     restart: always
+    healthcheck:
+        test: rabbitmq-diagnostics -q status && rabbitmq-diagnostics -q check_local_alarms
+        interval: 60s
+        timeout: 30s
+        retries: 3
     environment:
       - RABBITMQ_DEFAULT_USER=$RABBITMQ_USER
       - RABBITMQ_DEFAULT_PASS=$RABBITMQ_PASS
@@ -17,6 +22,8 @@ services:
     container_name: redis
     image: redis:latest
     restart: always
+    environment:
+      - REDIS_PASSWORD=$REDIS_PASSWORD
     entrypoint: redis-server --appendonly yes --requirepass $REDIS_PASSWORD --maxmemory 512mb --maxmemory-policy allkeys-lru
     networks:
       - default
@@ -35,6 +42,10 @@ services:
     build: 
       context: ./event_collector
       dockerfile: backend.Dockerfile
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+        restart: true
     volumes:
       - ./utils:/app/utils
     environment:
@@ -64,3 +75,23 @@ services:
       - S3_SECRET=$S3_SECRET
     ports:
       - 8000:8000
+
+  ml-pipeline:
+    container_name: ml-pipeline
+    build: 
+      context: ./regular_pipeline
+      dockerfile: ml-pipeline.Dockerfile
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - ./data:/app/data
+    environment:
+      - RABBITMQ_HOST=$RABBITMQ_HOST
+      - RABBITMQ_PORT=$RABBITMQ_PORT
+      - RABBITMQ_USER=$RABBITMQ_USER
+      - RABBITMQ_PASS=$RABBITMQ_PASS
+      - REDIS_HOST=$REDIS_HOST
+      - REDIS_PORT=$REDIS_PORT
+      - REDIS_PASSWORD=$REDIS_PASSWORD

@@ -50,6 +50,20 @@ async def interact(message: InteractEvent):
     # watched_filter.add(message.user_id, message.item_id)
     return 200
 
+@app.post('/cleanup')
+async def cleanup():
+    global _rabbitmq_exchange, _rabbitmq_connection
+    await create_rabbitmq_exchange()
+
+    # Getting channel
+    channel = await _rabbitmq_connection.channel()
+
+    # Getting queue
+    queue = await channel.declare_queue(queue_name, durable=True)
+
+    # Clear queue
+    await queue.purge()
+    return 200
 
 async def create_rabbitmq_exchange() -> AbstractRobustExchange:
     global _rabbitmq_exchange, _rabbitmq_connection
@@ -59,8 +73,6 @@ async def create_rabbitmq_exchange() -> AbstractRobustExchange:
             os.environ.get('RABBITMQ_PASS', 'guest'),
             os.environ.get('RABBITMQ_HOST', 'localhost')
         )
-        logging.info(conn_url)
-        logging.info(int(os.environ.get('RABBITMQ_PORT', 5672)))
         _rabbitmq_connection = await aio_pika.connect_robust(
             conn_url,
             loop=asyncio.get_event_loop(),
