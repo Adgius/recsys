@@ -62,11 +62,6 @@ TOP_K = 12
 async def index(request: Request):
     # если передан идентификатор пользователя, используем его
     user_id = get_user_id_from_cookies(request)
-    print(user_id)
-
-    # если пользователь первый раз, сгенерируем user_id
-    if user_id is None:
-        user_id = str(uuid.uuid4())
 
     # получить рекомендации через api модели
     # recommendations_url = f"{recommendation_service_url}/recs/{user_id}"
@@ -78,9 +73,9 @@ async def index(request: Request):
     #     # тут можно сделать fallback на стороне фронтенда
     #     recommended_item_ids = []
     recommended_item_ids = movies_data['movieId'].sample(100).to_list()
-    print(recommended_item_ids)
+    # print(recommended_item_ids)
     items_data = fetch_items_data_for_item_ids(recommended_item_ids)
-    print(items_data)
+    # print(items_data)
     response = templates.TemplateResponse(
         request=request,
         name='index.html',
@@ -90,6 +85,8 @@ async def index(request: Request):
             interactions_url=interactions_url
         )
     )
+
+    # если пользователь первый раз, сгенерируем user_id
     if user_id is None:
         response.set_cookie(key="user_id", value=uuid.uuid4())
     return response

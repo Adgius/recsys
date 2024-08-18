@@ -55,10 +55,13 @@
                 }
             });
         });
-
+        function getCookie(name) {
+            let cookie = document.cookie.split('; ').find(row => row.startsWith(name + '='));
+            return cookie ? cookie.split('=')[1] : null;
+        }
         function getUserID() {
             // Implement a function to retrieve the user's ID from cookies
-            return 'user_id';  // Replace with actual code to fetch user ID from cookies
+            return getCookie('user_id');  // Replace with actual code to fetch user ID from cookies
         }
     });
 </script>

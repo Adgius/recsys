@@ -6,5 +6,5 @@
 **/*.ipynb
 **/.DS_Store
 **/*.jpg
-./data/interactions.csv
-./webapp/static/images
+/data/interactions.csv
+/webapp/static/images

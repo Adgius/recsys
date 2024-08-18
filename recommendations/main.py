@@ -1,4 +1,5 @@
 import random
+import os
 from typing import List
 
 import numpy as np
@@ -10,7 +11,13 @@ from watched_filter import WatchedFilter
 
 app = FastAPI()
 
-redis_connection = redis.Redis('localhost')
+redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
+    username=os.environ.get('REDIS_USER', 'default'),
+    password=os.environ.get('REDIS_PASSWORD'),
+    host=os.environ.get('REDIS_HOST', 'localhost'),
+    port=os.environ.get('REDIS_PORT', 6379),
+)
+redis_connection = redis.Redis.from_url(redis_conn)
 watched_filter = WatchedFilter()
 
 unique_item_ids = set()

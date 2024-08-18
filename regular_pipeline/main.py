@@ -8,7 +8,7 @@ import polars as pl
 import redis
 from aio_pika import Message
 
-redis_conn = 'redis://{username}:{password}@{host}:{port}/popular'.format(
+redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
     username=os.environ.get('REDIS_USER', 'default'),
     password=os.environ.get('REDIS_PASSWORD'),
     host=os.environ.get('REDIS_HOST', 'localhost'),
@@ -69,7 +69,7 @@ async def collect_messages():
 
                         if len(new_data) > 0:
                             if os.path.exists('./data/interactions.csv'):
-                                data = pl.concat([pl.read_csv('./data/interactions.csv'), new_data])
+                                data = pl.concat([pl.read_csv('./data/interactions.csv', schema_overrides={'item_id': pl.String}), new_data])
                             else:
                                 data = new_data
                             data.write_csv('./data/interactions.csv')
@@ -83,7 +83,7 @@ async def calculate_top_recommendations():
     while True:
         if os.path.exists('./data/interactions.csv'):
             print('calculating top recommendations')
-            interactions = pl.read_csv('./data/interactions.csv')
+            interactions = pl.read_csv('./data/interactions.csv', schema_overrides={'item_id': pl.String})
             top_items = (
                 interactions
                 .sort('timestamp')
