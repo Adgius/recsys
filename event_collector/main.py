@@ -14,6 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from models import InteractEvent, RecommendationsResponse, NewItemsEvent
 from watched_filter import WatchedFilter
 
+logging.basicConfig(level=logging.INFO, filename=".logs",filemode="w",
+                    format="%(asctime)s %(levelname)s %(message)s")
+
 app = FastAPI()
 redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
     username=os.environ.get('REDIS_USER', 'default'),
@@ -48,18 +51,7 @@ EPSILON = 0.05
 
 @app.get('/healthcheck')
 def healthcheck():
-    return 200
-
-
-@app.get('/cleanup')
-def cleanup():
-    global unique_item_ids
-    unique_item_ids = set()
-    try:
-        redis_connection.delete('*')
-        redis_connection.json().delete('*')
-    except redis.exceptions.ConnectionError:
-        pass
+    logging.info('/healthcheck')
     return 200
 
 
@@ -67,12 +59,14 @@ def cleanup():
 def add_movie(request: NewItemsEvent):
     global unique_item_ids
     for item_id in request.item_ids:
+        logging.info(f'/add_item {item_id}')
         unique_item_ids.add(item_id)
     return 200
 
 
 @app.get('/recs/{user_id}')
 def get_recs(user_id: str):
+    logging.info(f'/recs/{user_id}')
     global unique_item_ids
 
     try:
@@ -87,6 +81,7 @@ def get_recs(user_id: str):
 
 @app.post('/interact')
 async def interact(message: InteractEvent):
+    logging.info(f'/interact {message.user_id} {message.item_ids}')
     message.timestamp = time.time()
     await publish_message(Message(
         bytes(json.dumps(message.model_dump()), "utf-8"),
@@ -98,6 +93,15 @@ async def interact(message: InteractEvent):
 
 @app.post('/cleanup')
 async def cleanup():
+    logging.info(f'/cleanup')
+
+    # Clear Redis
+    global unique_item_ids
+    unique_item_ids = set()
+    redis_connection.delete('*')
+    redis_connection.json().delete('*')
+    
+    # Clear RabbitMQ
     global _rabbitmq_exchange, _rabbitmq_connection
     await create_rabbitmq_exchange()
 
@@ -105,7 +109,7 @@ async def cleanup():
     channel = await _rabbitmq_connection.channel()
 
     # Getting queue
-    queue = await channel.declare_queue(queue_name, durable=True)
+    queue = await channel.declare_queue(queue_name)
 
     # Clear queue
     await queue.purge()
