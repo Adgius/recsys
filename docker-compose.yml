@@ -54,6 +54,7 @@ services:
         restart: true
     volumes:
       - ./utils:/app/utils
+      - .logs:/app/.logs
     environment:
       - PYTHONPATH=/app/utils
       - RABBITMQ_HOST=$RABBITMQ_HOST
@@ -65,6 +66,30 @@ services:
       - REDIS_PASSWORD=$REDIS_PASSWORD
     ports:
       - 5000:5000
+
+  backend-recs:
+    container_name: backend-recs
+    build: 
+      context: ./recommendations
+      dockerfile: recs.Dockerfile
+    depends_on: 
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - ./utils:/app/utils
+      - .logs:/app/.logs
+    environment:
+      - PYTHONPATH=/app/utils
+      - RABBITMQ_HOST=$RABBITMQ_HOST
+      - RABBITMQ_PORT=$RABBITMQ_PORT
+      - RABBITMQ_USER=$RABBITMQ_USER
+      - RABBITMQ_PASS=$RABBITMQ_PASS
+      - REDIS_HOST=$REDIS_HOST
+      - REDIS_PORT=$REDIS_PORT
+      - REDIS_PASSWORD=$REDIS_PASSWORD
+    ports:
+      - 5001:5001
 
   frontend:
     container_name: frontend

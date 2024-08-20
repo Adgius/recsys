@@ -11,7 +11,7 @@ from aio_pika.abc import AbstractRobustExchange, AbstractRobustConnection
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import InteractEvent, RecommendationsResponse, NewItemsEvent
+from models import InteractEvent
 from watched_filter import WatchedFilter
 
 logging.basicConfig(level=logging.INFO, filename=".logs",filemode="w",
@@ -44,39 +44,10 @@ app.add_middleware(
                    "Authorization"],
 )
 
-
-unique_item_ids = set()
-EPSILON = 0.05
-
-
 @app.get('/healthcheck')
 def healthcheck():
     logging.info('/healthcheck')
     return 200
-
-
-@app.post('/add_items')
-def add_movie(request: NewItemsEvent):
-    global unique_item_ids
-    for item_id in request.item_ids:
-        logging.info(f'/add_item {item_id}')
-        unique_item_ids.add(item_id)
-    return 200
-
-
-@app.get('/recs/{user_id}')
-def get_recs(user_id: str):
-    logging.info(f'/recs/{user_id}')
-    global unique_item_ids
-
-    try:
-        item_ids = redis_connection.json().get('top_items')
-    except redis.exceptions.ConnectionError:
-        item_ids = None
-
-    if item_ids is None or random.random() < EPSILON:
-        item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
-    return RecommendationsResponse(item_ids=item_ids)
 
 
 @app.post('/interact')
@@ -89,30 +60,6 @@ async def interact(message: InteractEvent):
     ))
 
     watched_filter.add(message.user_id, message.item_ids)
-    return 200
-
-@app.post('/cleanup')
-async def cleanup():
-    logging.info(f'/cleanup')
-
-    # Clear Redis
-    global unique_item_ids
-    unique_item_ids = set()
-    redis_connection.delete('*')
-    redis_connection.json().delete('*')
-    
-    # Clear RabbitMQ
-    global _rabbitmq_exchange, _rabbitmq_connection
-    await create_rabbitmq_exchange()
-
-    # Getting channel
-    channel = await _rabbitmq_connection.channel()
-
-    # Getting queue
-    queue = await channel.declare_queue(queue_name)
-
-    # Clear queue
-    await queue.purge()
     return 200
 
 async def create_rabbitmq_exchange() -> AbstractRobustExchange:
