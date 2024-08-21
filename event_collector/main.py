@@ -59,7 +59,8 @@ async def interact(message: InteractEvent):
         content_type="text/json",
     ))
 
-    watched_filter.add(message.user_id, message.item_ids)
+    for item_id in message.item_ids:
+        await watched_filter.add(message.user_id, item_id)
     return 200
 
 async def create_rabbitmq_exchange() -> AbstractRobustExchange:

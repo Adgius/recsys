@@ -1,19 +1,19 @@
 import os
 
-import redis
+import redis.asyncio as redis
 
 
 class WatchedFilter:
     def __init__(self):
         self.redis_connection = redis.Redis(
-            os.environ.get('REDIS_HOST', 'localhost'),
+            host=os.environ.get('REDIS_HOST', 'localhost'),
             port=int(os.environ.get('REDIS_PORT', 6397)),
             password=os.environ.get('REDIS_PASSWORD')
         )
 
-    def add(self, user_id, item_id):
+    async def add(self, user_id, item_id):
         try:
-            self.redis_connection.set(f'{user_id}-{item_id}', 1)
+            await self.redis_connection.set(f'{user_id}-{item_id}', 1)
         except redis.exceptions.ConnectionError:
             # ignore errors if redis unavailable
             pass

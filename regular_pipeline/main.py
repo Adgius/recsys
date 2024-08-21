@@ -90,9 +90,9 @@ async def calculate_top_recommendations():
                 .unique(['user_id', 'item_id', 'action'], keep='last')
                 .filter(pl.col('action') == 'like')
                 .group_by('item_id')
-                .count()
+                .len()
                 .sort('count', descending=True)
-                .head(100)
+                .head(500)
             )['item_id'].to_list()
 
             top_items = [str(item_id) for item_id in top_items]
