@@ -1,3 +1,4 @@
 fastapi[all]
 aio-pika==9.4.2
 redis==5.0.7
+numpy==1.26.4

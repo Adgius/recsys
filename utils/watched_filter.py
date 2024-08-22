@@ -13,7 +13,7 @@ class WatchedFilter:
 
     async def add(self, user_id, item_id):
         try:
-            await self.redis_connection.set(f'{user_id}-{item_id}', 1)
+            await self.redis_connection.set(f'{user_id}_{item_id}', 1)
         except redis.exceptions.ConnectionError:
             # ignore errors if redis unavailable
             pass

@@ -1,9 +1,9 @@
 import os
 import asyncio
-import json
-import time
+import random
 import logging
 
+import numpy as np
 import redis
 import aio_pika
 from aio_pika.abc import AbstractRobustExchange, AbstractRobustConnection
@@ -56,13 +56,20 @@ def get_recs(user_id: str):
     logging.info(f'/recs/{user_id}')
     global unique_item_ids
 
+    #  Персональные рекомендации
     try:
-        item_ids = redis_connection.json().get('top_items')
+        item_ids = redis_connection.get(user_id)
+        if not item_ids:
+            item_ids = redis_connection.json().get('top_items')
     except redis.exceptions.ConnectionError:
-        item_ids = None
+        item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
 
+    #  С определенным шансом берутся случайные
     if item_ids is None or random.random() < EPSILON:
         item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
+    
+    #  Фильтруем уже просмотренные
+    item_ids = [i for i in item_ids if redis_connection.get(f"{user_id}_{i}") is None]
     return RecommendationsResponse(item_ids=item_ids)
 
 @app.post('/cleanup')

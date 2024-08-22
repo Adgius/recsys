@@ -8,6 +8,12 @@ import polars as pl
 import redis
 from aio_pika import Message
 
+from ml_model import W2V_model
+from ml_metrics import user_ndcg, user_recall
+
+RANDOM_STATE = 42
+TOP_K = 30
+
 redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
     username=os.environ.get('REDIS_USER', 'default'),
     password=os.environ.get('REDIS_PASSWORD'),
@@ -101,10 +107,20 @@ async def calculate_top_recommendations():
         await asyncio.sleep(10)
 
 
+async def calculate_w2v_recommendations():
+    while True:
+        if os.path.exists('./data/interactions.csv'):
+            print('calculating w2v recommendations')
+            W2V_model.create_dataset()
+            W2V_model.fit()
+            W2V_model.get_recommendations()
+        await asyncio.sleep(60)
+
 async def main():
     await asyncio.gather(
         collect_messages(),
         calculate_top_recommendations(),
+        calculate_w2v_recommendations(),
     )
 
 

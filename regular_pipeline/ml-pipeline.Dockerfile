@@ -1,7 +1,7 @@
 FROM python:3.11.9-bullseye
 
 WORKDIR /app
-COPY main.py requirements.txt /app/
+COPY main.py ml_model.py requirements.txt /app/
 
 EXPOSE 5000
 

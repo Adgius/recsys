@@ -1,9 +1,22 @@
+import polars as pl
+import numpy as np
+import optuna
+import gensim
+import random
+import logging
+
+from gensim.models import Word2Vec
+
 class W2V_model:
+
+    global TOP_K
+    global RANDOM_STATE
+
     
     @classmethod
     def create_dataset(cls):
         logging.info('Creating dataset for w2v ...')
-        interactions = pl.read_csv('../data/interactions.csv', schema_overrides={'item_id': pl.String})
+        interactions = pl.read_csv('./data/interactions.csv', schema_overrides={'item_id': pl.String})
         cls.user_mapping = {k: v for v, k in enumerate(interactions['item_id'].unique())}
         cls.user_mapping_inverse = {k: v for v, k in cls.user_mapping.items()}
         
@@ -13,7 +26,7 @@ class W2V_model:
             # оставляем только положительные взаимодействия
             .filter(pl.col('action') == 'like')
             # .unique(['user_id', 'item_id', 'action'], keep='last')
-            .with_columns(pl.col('item_id').map_elements(user_mapping.get))
+            .with_columns(pl.col('item_id').map_elements(cls.user_mapping.get))
             .group_by('user_id')
             .agg([
                 # для валидации оставим последнее взаимодействие в истории
@@ -67,7 +80,6 @@ class W2V_model:
             'vector_size': vector_size,
         })
     
-        set_seed()
         model = Word2Vec(
             cls.grouped_df['train_item_ids'].to_list(),
             window=window,
@@ -89,12 +101,11 @@ class W2V_model:
     def fit_best(cls, best_params):
         logging.info('Fitting the best model ...')
         try:
-            model = Word2Vec(
+            cls.model = Word2Vec(
                 cls.grouped_df['train_item_ids'].to_list(),
                 epochs=10, 
                 **best_params
             )
-            cls.model = model
             logging.info('Best model was created!')
         except BaseException as e:
             logging.critical(e)
@@ -113,11 +124,11 @@ class W2V_model:
     @classmethod
     def get_recommendations(cls, item_id):
         logging.info('Get recommendations ')
+        global redis_connection
         try:
             for user_id, ids in cls.grouped_df.select('user_id', pl.struct('train_item_ids', 'test_item_ids')).rows():
                 item_ids = ids['train_item_ids'] + ids['test_item_ids']
-                y_rec = [cls.user_mapping_inverse.get(pred[0]) for pred in model.predict_output_word(item_ids, TOP_K)]
-                y_rec = [i for i in y_rec if redis_connection.get(f"{user_id}-{i}") is None]
+                y_rec = [cls.user_mapping_inverse.get(pred[0]) for pred in cls.model.predict_output_word(item_ids, TOP_K)]
                 redis_connection.json().set(user_id, '.', y_rec)
         except BaseException as e:
             logging.critical(e)   
