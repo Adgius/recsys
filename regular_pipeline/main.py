@@ -2,6 +2,7 @@ import asyncio
 import json
 import os.path
 import time
+import logging
 
 import aio_pika
 import polars as pl
@@ -9,10 +10,11 @@ import redis
 from aio_pika import Message
 
 from ml_model import W2V_model
-from ml_metrics import user_ndcg, user_recall
 
-RANDOM_STATE = 42
-TOP_K = 30
+
+logging.basicConfig(level=logging.INFO, filename=".logs",filemode="w",
+                    format="%(asctime)s %(levelname)s %(message)s")
+
 
 redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
     username=os.environ.get('REDIS_USER', 'default'),
@@ -20,7 +22,6 @@ redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
     host=os.environ.get('REDIS_HOST', 'localhost'),
     port=os.environ.get('REDIS_PORT', 6379),
 )
-print(redis_conn)
 redis_connection = redis.Redis.from_url(redis_conn)
 
 
@@ -30,7 +31,6 @@ async def collect_messages():
         os.environ.get('RABBITMQ_PASS', 'guest'),
         os.environ.get('RABBITMQ_HOST', 'localhost')
     )
-    print(conn_url)
     connection = await aio_pika.connect_robust(
         conn_url,
         loop=asyncio.get_event_loop(),
@@ -45,8 +45,8 @@ async def collect_messages():
         # Creating channel
         channel = await connection.channel()
 
-        # Will take no more than 10 messages in advance
-        await channel.set_qos(prefetch_count=10)
+        # Will take no more than 50 messages in advance
+        await channel.set_qos(prefetch_count=50)
 
         # Declaring queue
         queue = await channel.declare_queue(queue_name)
@@ -54,7 +54,6 @@ async def collect_messages():
         # Declaring exchange
         exchange = await channel.declare_exchange(exchange, type='direct')
         await queue.bind(exchange, routing_key)
-        # await exchange.publish(Message(bytes(queue.name, "utf-8")), routing_key)
 
         t_start = time.time()
         data = []
@@ -65,8 +64,7 @@ async def collect_messages():
                     message = json.loads(message)
                     data.append(message)
                     if time.time() - t_start > 10:
-                        print('saving events from rabbitmq')
-                        print(data)
+                        logging.info('saving events from rabbitmq')
                         # update data if 10s passed
                         new_data = pl.DataFrame(data).explode(['item_ids', 'actions']).rename({
                             'item_ids': 'item_id',
@@ -88,7 +86,7 @@ async def collect_messages():
 async def calculate_top_recommendations():
     while True:
         if os.path.exists('./data/interactions.csv'):
-            print('calculating top recommendations')
+            logging.info('calculating top recommendations')
             interactions = pl.read_csv('./data/interactions.csv', schema_overrides={'item_id': pl.String})
             top_items = (
                 interactions
@@ -97,7 +95,7 @@ async def calculate_top_recommendations():
                 .filter(pl.col('action') == 'like')
                 .group_by('item_id')
                 .len()
-                .sort('count', descending=True)
+                .sort('len', descending=True)
                 .head(500)
             )['item_id'].to_list()
 
@@ -110,10 +108,8 @@ async def calculate_top_recommendations():
 async def calculate_w2v_recommendations():
     while True:
         if os.path.exists('./data/interactions.csv'):
-            print('calculating w2v recommendations')
-            W2V_model.create_dataset()
-            W2V_model.fit()
-            W2V_model.get_recommendations()
+            logging.info('calculating w2v recommendations')
+            W2V_model.run_pipeline()
         await asyncio.sleep(60)
 
 async def main():

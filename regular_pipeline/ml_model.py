@@ -1,18 +1,27 @@
 import polars as pl
 import numpy as np
 import optuna
-import gensim
-import random
+import redis
 import logging
+import os
 
 from gensim.models import Word2Vec
 
+from ml_metrics import user_ndcg, user_recall
+
+RANDOM_STATE = 42
+TOP_K = 30
+
+redis_conn = 'redis://{username}:{password}@{host}:{port}/0'.format(
+    username=os.environ.get('REDIS_USER', 'default'),
+    password=os.environ.get('REDIS_PASSWORD'),
+    host=os.environ.get('REDIS_HOST', 'localhost'),
+    port=os.environ.get('REDIS_PORT', 6379),
+)
+redis_connection = redis.Redis.from_url(redis_conn)
+
 class W2V_model:
 
-    global TOP_K
-    global RANDOM_STATE
-
-    
     @classmethod
     def create_dataset(cls):
         logging.info('Creating dataset for w2v ...')
@@ -62,39 +71,39 @@ class W2V_model:
 
     @classmethod
     def objective(cls, trial):
-        sg = trial.suggest_categorical('sg', [0, 1])
-        hs = trial.suggest_categorical('hs', [0, 1])
-        window = trial.suggest_int('window', 1, 10)
-        ns_exponent = trial.suggest_float('ns_exponent', -3, 3)
-        negative = trial.suggest_int('negative', 3, 20)
-        min_count = trial.suggest_int('min_count', 0, 20)
-        vector_size = trial.suggest_categorical('vector_size', [16, 32, 64, 128])
-    
-        logging.info({
-            'sg': sg,
-            'hs': hs,
-            'window_len': window,
-            'ns_exponent': ns_exponent,
-            'negative': negative,
-            'min_count': min_count,
-            'vector_size': vector_size,
-        })
-    
-        model = Word2Vec(
-            cls.grouped_df['train_item_ids'].to_list(),
-            window=window,
-            sg=sg,
-            hs=hs,
-            min_count=min_count,
-            vector_size=vector_size,
-            negative=negative,
-            ns_exponent=ns_exponent,
-            seed=RANDOM_STATE,
-            epochs=10,
-        )
-    
-        mean_ndcg, mean_recall = cls.evaluate_model(model)
-        logging.info(f'NDCG@{TOP_K} = {mean_ndcg}, Recall@{TOP_K} = {mean_recall}')
+        try:
+            sg = trial.suggest_categorical('sg', [0, 1])
+            window = trial.suggest_int('window', 1, 10)
+            ns_exponent = trial.suggest_float('ns_exponent', -3, 3)
+            negative = trial.suggest_int('negative', 3, 20)
+            min_count = trial.suggest_int('min_count', 0, 20)
+            vector_size = trial.suggest_categorical('vector_size', [16, 32, 64, 128])
+        
+            logging.info({
+                'sg': sg,
+                'window_len': window,
+                'ns_exponent': ns_exponent,
+                'negative': negative,
+                'min_count': min_count,
+                'vector_size': vector_size,
+            })
+        
+            model = Word2Vec(
+                cls.grouped_df['train_item_ids'].to_list(),
+                window=window,
+                sg=sg,
+                min_count=min_count,
+                vector_size=vector_size,
+                negative=negative,
+                ns_exponent=ns_exponent,
+                seed=RANDOM_STATE,
+                epochs=10,
+            )
+        
+            mean_ndcg, mean_recall = cls.evaluate_model(model)
+            logging.info(f'NDCG@{TOP_K} = {mean_ndcg}, Recall@{TOP_K} = {mean_recall}')
+        except:
+            return 0
         return mean_recall
 
     @classmethod
@@ -114,15 +123,12 @@ class W2V_model:
     @classmethod
     def fit(cls):
         logging.info('Starting optuna validation ...')
-        try:
-            study = optuna.create_study(directions=('maximize',))
-            study.optimize(cls.objective, n_trials=100)
-            cls.fit_best(study.best_params)
-        except BaseException as e:
-            logging.critical(e)
+        study = optuna.create_study(directions=('maximize',))
+        study.optimize(cls.objective, n_trials=100)
+        cls.fit_best(study.best_params)
 
     @classmethod
-    def get_recommendations(cls, item_id):
+    def get_recommendations(cls):
         logging.info('Get recommendations ')
         global redis_connection
         try:
@@ -131,4 +137,10 @@ class W2V_model:
                 y_rec = [cls.user_mapping_inverse.get(pred[0]) for pred in cls.model.predict_output_word(item_ids, TOP_K)]
                 redis_connection.json().set(user_id, '.', y_rec)
         except BaseException as e:
-            logging.critical(e)   
+            logging.critical(e)
+
+    @classmethod
+    def run_pipeline(cls):    
+        cls.create_dataset()
+        cls.fit()
+        cls.get_recommendations()

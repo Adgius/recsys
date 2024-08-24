@@ -119,6 +119,7 @@ services:
     volumes:
       - ./utils:/app/utils
       - ./data:/app/data
+      - .logs:/app/.logs
     environment:
       - PYTHONPATH=/app/utils
       - RABBITMQ_HOST=$RABBITMQ_HOST

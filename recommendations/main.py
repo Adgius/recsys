@@ -58,7 +58,7 @@ def get_recs(user_id: str):
 
     #  Персональные рекомендации
     try:
-        item_ids = redis_connection.get(user_id)
+        item_ids = redis_connection.json().get(user_id)
         if not item_ids:
             item_ids = redis_connection.json().get('top_items')
     except redis.exceptions.ConnectionError:
