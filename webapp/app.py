@@ -10,12 +10,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi import FastAPI, Response, Request, Cookie
 from fastapi.templating import Jinja2Templates
 
-from s3_connect import download_static_images
+from s3_connect import download_static_images_arch
 
 
 IMAGE_PATH = './static/images'
 if not os.path.exists(IMAGE_PATH):
-    download_static_images(IMAGE_PATH)
+    download_static_images_arch('static')
 
 templates = Jinja2Templates(directory="templates")
 
@@ -58,6 +58,9 @@ movie_id_imdb = {
 # отображаем только топ-12 рекомендаций
 TOP_K = 12
 
+@app.get('/get_all_items')
+def get_all_items():
+    return set([str(i) for i in movie_id_imdb.keys()])
 
 @app.get('/', response_class=HTMLResponse)
 async def index(request: Request):
@@ -104,11 +107,3 @@ def fetch_items_data_for_item_ids(item_ids):
                for item_id in item_ids
                if item_id in movie_id_title
            ][:TOP_K]
-
-
-# if __name__ == '__main__':
-#     data = {
-#         "item_ids": list(map(str, movie_id_title.keys())),
-#     }
-#     requests.post(f'{recommendation_service_url}/add_items', json=data)
-#     app.run(debug=True, port=8000)

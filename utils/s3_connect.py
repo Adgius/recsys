@@ -1,5 +1,10 @@
 import boto3
 import os
+import requests 
+import zipfile
+
+from io import BytesIO
+
 
 def download_static_images(path):
     s3 = boto3.client(service_name='s3',
@@ -15,3 +20,7 @@ def download_static_images(path):
                     Key=key['Key'],
                     Filename=os.path.join(path, key['Key']))
 
+def download_static_images_arch(path):
+    arch = requests.get('https://storage.yandexcloud.net/web-imgs-arch/images.zip')
+    with zipfile.ZipFile(BytesIO(arch.content)) as zip_file:
+        zip_file.extractall(path)

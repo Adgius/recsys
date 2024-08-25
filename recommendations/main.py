@@ -2,6 +2,7 @@ import os
 import asyncio
 import random
 import logging
+import requests
 
 import numpy as np
 import redis
@@ -35,6 +36,8 @@ _rabbitmq_exchange = None
 unique_item_ids = set()
 EPSILON = 0.05
 
+movie_id_imdb = eval(requests.get('http://frontend:8000/get_all_items').content.decode())
+
 
 @app.get('/healthcheck')
 def healthcheck():
@@ -60,22 +63,23 @@ def get_recs(user_id: str):
     try:
         item_ids = redis_connection.json().get(user_id)
         popular_item_ids = redis_connection.json().get('top_items')
-        print(1, item_ids, popular_item_ids)
-        if item_ids:
-            item_ids += popular_item_ids
-        else:
-            item_ids = popular_item_ids
-        print(2, item_ids)
+        random_item_ids = np.random.choice(list(movie_id_imdb), size=20, replace=False).tolist()
+
+        item_ids = item_ids if item_ids else [] + popular_item_ids if popular_item_ids else [] + random_item_ids
+
     except redis.exceptions.ConnectionError:
         item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
-    print(3, item_ids)
+
     #  С определенным шансом берутся случайные
-    if item_ids is None or random.random() < EPSILON or len(item_ids) < 10:
-        item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
-    print(4, item_ids)
+    if random.random() < EPSILON< 10:
+        if len(unique_item_ids) != 0:
+            item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
+        else:
+            item_ids = np.random.choice(list(movie_id_imdb), size=20, replace=False).tolist()
+
     #  Фильтруем уже просмотренные
     item_ids = [i for i in item_ids if redis_connection.get(f"{user_id}_{i}") is None]
-    print(5, item_ids)
+
     return RecommendationsResponse(item_ids=item_ids)
 
 @app.post('/cleanup')
