@@ -59,17 +59,23 @@ def get_recs(user_id: str):
     #  Персональные рекомендации
     try:
         item_ids = redis_connection.json().get(user_id)
-        if not item_ids:
-            item_ids = redis_connection.json().get('top_items')
+        popular_item_ids = redis_connection.json().get('top_items')
+        print(1, item_ids, popular_item_ids)
+        if item_ids:
+            item_ids += popular_item_ids
+        else:
+            item_ids = popular_item_ids
+        print(2, item_ids)
     except redis.exceptions.ConnectionError:
         item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
-
+    print(3, item_ids)
     #  С определенным шансом берутся случайные
-    if item_ids is None or random.random() < EPSILON:
+    if item_ids is None or random.random() < EPSILON or len(item_ids) < 10:
         item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
-    
+    print(4, item_ids)
     #  Фильтруем уже просмотренные
     item_ids = [i for i in item_ids if redis_connection.get(f"{user_id}_{i}") is None]
+    print(5, item_ids)
     return RecommendationsResponse(item_ids=item_ids)
 
 @app.post('/cleanup')

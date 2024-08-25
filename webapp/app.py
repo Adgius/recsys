@@ -28,7 +28,8 @@ app.mount(
 )
 # app.secret_key = os.urandom(24)
 
-recommendation_service_url = os.environ.get('SERVICE_URL')
+recommendation_service_url = os.environ.get('RECSYS_SERVICE_URL')
+print(recommendation_service_url)
 interactions_url = os.environ.get('SERVICE_API_URL')
 
 links_data = (
@@ -60,22 +61,20 @@ TOP_K = 12
 
 @app.get('/', response_class=HTMLResponse)
 async def index(request: Request):
+    print(recommendation_service_url)
     # если передан идентификатор пользователя, используем его
     user_id = get_user_id_from_cookies(request)
 
     # получить рекомендации через api модели
-    # recommendations_url = f"{recommendation_service_url}/recs/{user_id}"
-    # response = requests.get(recommendations_url)
+    recommendations_url = f"{recommendation_service_url}/recs/{user_id}"
+    response = requests.get(recommendations_url)
 
-    # if response.status_code == 200:
-    #     recommended_item_ids = response.json()['item_ids']
-    # else:
-    #     # тут можно сделать fallback на стороне фронтенда
-    #     recommended_item_ids = []
-    recommended_item_ids = movies_data['movieId'].sample(100).to_list()
-    # print(recommended_item_ids)
+    if response.status_code == 200:
+        recommended_item_ids = response.json()['item_ids']
+    else:
+        # тут можно сделать fallback на стороне фронтенда
+        recommended_item_ids = []
     items_data = fetch_items_data_for_item_ids(recommended_item_ids)
-    # print(items_data)
     response = templates.TemplateResponse(
         request=request,
         name='index.html',
