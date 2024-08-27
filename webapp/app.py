@@ -58,6 +58,12 @@ movie_id_imdb = {
 # отображаем только топ-12 рекомендаций
 TOP_K = 12
 
+
+@app.get('/healthcheck')
+def health_check():
+    return {"status": "healthy"}
+
+
 @app.get('/get_all_items')
 def get_all_items():
     return set([str(i) for i in movie_id_imdb.keys()])

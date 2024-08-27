@@ -76,6 +76,9 @@ services:
       rabbitmq:
         condition: service_healthy
         restart: true
+      frontend:
+        condition: service_healthy
+        restart: true
     volumes:
       - ./utils:/app/utils
       - .logs:/app/.logs
@@ -96,6 +99,11 @@ services:
     build: 
       context: ./webapp
       dockerfile: frontend.Dockerfile
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     volumes:
       - ./utils:/app/utils
     environment:

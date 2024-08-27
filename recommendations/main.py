@@ -71,7 +71,7 @@ def get_recs(user_id: str):
         item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
 
     #  С определенным шансом берутся случайные
-    if random.random() < EPSILON< 10:
+    if random.random() < EPSILON:
         if len(unique_item_ids) != 0:
             item_ids = np.random.choice(list(unique_item_ids), size=20, replace=False).tolist()
         else:
